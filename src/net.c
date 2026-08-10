@@ -3,15 +3,16 @@
 #include <netdb.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-# define PORT "3000"
+#define PORT "3000"
 
 int main() {
     struct addrinfo hints;
     struct addrinfo *res;
 
-    int status;
+    int status;  /* track return values for errors */
 
     /* clear so garbage data doesn't interfere with response */
 
@@ -26,10 +27,33 @@ int main() {
     status = getaddrinfo(NULL, PORT, &hints, &res);
 
     if (status != 0) {
-        fprintf(stderr, "error while retrieving address info: %s\n",
-                gai_strerror(status));
+        fprintf(stderr, "server err : %s\n", gai_strerror(status));
+        exit(1);
     }
 
-    printf("status: %d\n", status);
+    int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
+    if (sockfd == -1) {
+        fprintf(stderr, "server error : unable to create socket\n");
+        exit(1);
+    }
+
+    status = bind(sockfd, res->ai_addr, res->ai_addrlen);
+
+    if (status == -1) {
+        fprintf(stderr, "server error : unable to bind socket\n");
+        exit(1);
+    }
+
+    int on = 1;
+
+    /* enable to make another socket with the same address after termination */
+
+    status = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+
+    if (status == -1) {
+        fprintf(stderr, "server warning : unable to set socket options\n");
+    }
+
+    freeaddrinfo(res);
 }
