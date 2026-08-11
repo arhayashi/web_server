@@ -79,6 +79,13 @@ int main() {
     
     cli_sockfd = accept(sockfd, (struct sockaddr *)&cli_sockaddr,
                         &cli_addrlen);
+
+    if (cli_sockfd == -1) {
+        fprintf(stderr, "server error : unable to accept socket\n");
+        close(sockfd);
+        freeaddrinfo(res);
+        exit(1);
+    }
     
     printf("client socket: %d\n", cli_sockfd);
 
