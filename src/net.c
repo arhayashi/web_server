@@ -15,7 +15,7 @@
  */
 
 int get_server_socket() {
-    struct addrinfo hints;  /* limits potential addresses to connect to*/
+    struct addrinfo hints;  /* limits potential addresses to connect to */
     struct addrinfo *res;   /* tracks potential address to connect to */
     int status;             /* tracks return values for errors */
     int sockfd;
@@ -89,7 +89,7 @@ int get_server_socket() {
 
 int get_client_socket(int server_socket) {
     struct sockaddr_storage client_sockaddr;  /* stores client address info */
-    socklen_t client_addrlen;                 /* stores client address len */
+    socklen_t client_addrlen = sizeof(client_sockaddr);
     int sockfd;
     
     sockfd = accept(server_socket, (struct sockaddr *)&client_sockaddr,
@@ -102,18 +102,3 @@ int get_client_socket(int server_socket) {
     
     return sockfd;
 } /* get_client_socket() */
-
-# if 0
-
-int main() {
-    int server_socket = get_server_socket();
-    printf("server socket: %d\n", server_socket);
-
-    int client_socket = get_client_socket(server_socket);
-    printf("client socket: %d\n", client_socket);
-
-    close(server_socket);
-    close(client_socket);
-}
-
-# endif
