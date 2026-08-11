@@ -1,26 +1,26 @@
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <netdb.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #define PORT "3000"
 #define BACKLOG (10)
 
-int main() {
-    struct addrinfo hints;
-    struct addrinfo *res;
+/*
+ * This function creates the server socket with the loopback address and makes
+ * the server listen to incoming connections.
+ */
 
-    int status;  /* track return values for errors */
-
-    /* clear so garbage data doesn't interfere with response */
+int get_server_socket() {
+    struct addrinfo hints;  /* limits potential addresses to connect to*/
+    struct addrinfo *res;   /* tracks potential address to connect to */
+    int status;             /* tracks return values for errors */
+    int sockfd;
 
     memset(&hints, 0, sizeof(hints));
-
-    /* initialize hints to limit responses */
 
     hints.ai_flags = AI_PASSIVE;        /* use loopback address */
     hints.ai_family = AF_UNSPEC;        /* use IPv4 or IPv6 */
@@ -29,68 +29,91 @@ int main() {
     status = getaddrinfo(NULL, PORT, &hints, &res);
 
     if (status != 0) {
-        fprintf(stderr, "server err : %s\n", gai_strerror(status));
+        fprintf(stderr, "[ERROR] %s\n", gai_strerror(status));
         exit(1);
     }
 
-    int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    struct addrinfo *tmp_addr = NULL;
 
-    if (sockfd == -1) {
-        fprintf(stderr, "server error : unable to create socket\n");
-        freeaddrinfo(res);
-        exit(1);
+    for (tmp_addr = res; tmp_addr != NULL; tmp_addr = tmp_addr->ai_next) {
+        sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+
+        if (sockfd == -1) {
+            fprintf(stderr, "[WARNING] unable to create server socket\n");
+            continue;
+        }
+
+        int on = 1;
+        status = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+
+        if (status == -1) {
+            fprintf(stderr, "[WARNING] unable to set server socket options\n");
+            close(sockfd);
+            continue;
+        }
+
+        status = bind(sockfd, res->ai_addr, res->ai_addrlen);
+
+        if (status == -1) {
+            fprintf(stderr, "[WARNING] unable to bind server socket\n");
+            close(sockfd);
+            continue;
+        }
+
+        break;
     }
 
-    /* enable to make another socket with the same address after termination */
+    freeaddrinfo(res);
 
-    int on = 1;
-    status = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    /* indicates no address found */
 
-    if (status == -1) {
-        fprintf(stderr, "server error : unable to set socket options\n");
-        close(sockfd);
-        freeaddrinfo(res);
-        exit(1);
-    }
-
-    /* bind socket to address */
-
-    status = bind(sockfd, res->ai_addr, res->ai_addrlen);
-
-    if (status == -1) {
-        fprintf(stderr, "server error : unable to bind socket\n");
-        close(sockfd);
-        freeaddrinfo(res);
+    if (tmp_addr == NULL) {
+        fprintf(stderr, "[ERROR] unable to find connectable address\n");
         exit(1);
     }
 
     status = listen(sockfd, BACKLOG);
 
     if (status == -1) {
-        fprintf(stderr, "server error : unable to listen with socket\n");
+        fprintf(stderr, "[ERROR] unable to listen with server socket\n");
         close(sockfd);
-        freeaddrinfo(res);
         exit(1);
     }
-   
-    struct sockaddr_storage cli_sockaddr;
-    socklen_t cli_addrlen;
-    int cli_sockfd;
-    
-    cli_sockfd = accept(sockfd, (struct sockaddr *)&cli_sockaddr,
-                        &cli_addrlen);
 
-    if (cli_sockfd == -1) {
-        fprintf(stderr, "server error : unable to accept socket\n");
-        close(sockfd);
-        freeaddrinfo(res);
+    return sockfd;
+} /* get_server_socket() */
+
+/*
+ * This function creates a socket for communicating with the client.
+ */
+
+int get_client_socket(int server_socket) {
+    struct sockaddr_storage client_sockaddr;  /* stores client address info */
+    socklen_t client_addrlen;                 /* stores client address len */
+    int sockfd;
+    
+    sockfd = accept(server_socket, (struct sockaddr *)&client_sockaddr,
+                    &client_addrlen);
+
+    if (sockfd == -1) {
+        fprintf(stderr, "[ERROR] unable to create client socket\n");
         exit(1);
     }
     
-    printf("client socket: %d\n", cli_sockfd);
+    return sockfd;
+} /* get_client_socket() */
 
-    close(sockfd);
-    close(cli_sockfd);
-    freeaddrinfo(res);
+# if 0
 
+int main() {
+    int server_socket = get_server_socket();
+    printf("server socket: %d\n", server_socket);
+
+    int client_socket = get_client_socket(server_socket);
+    printf("client socket: %d\n", client_socket);
+
+    close(server_socket);
+    close(client_socket);
 }
+
+# endif
