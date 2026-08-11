@@ -5,8 +5,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define PORT "3000"
+#define BACKLOG (10)
 
 int main() {
     struct addrinfo hints;
@@ -35,25 +37,53 @@ int main() {
 
     if (sockfd == -1) {
         fprintf(stderr, "server error : unable to create socket\n");
+        freeaddrinfo(res);
         exit(1);
     }
+
+    /* enable to make another socket with the same address after termination */
+
+    int on = 1;
+    status = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+
+    if (status == -1) {
+        fprintf(stderr, "server error : unable to set socket options\n");
+        close(sockfd);
+        freeaddrinfo(res);
+        exit(1);
+    }
+
+    /* bind socket to address */
 
     status = bind(sockfd, res->ai_addr, res->ai_addrlen);
 
     if (status == -1) {
         fprintf(stderr, "server error : unable to bind socket\n");
+        close(sockfd);
+        freeaddrinfo(res);
         exit(1);
     }
 
-    int on = 1;
-
-    /* enable to make another socket with the same address after termination */
-
-    status = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    status = listen(sockfd, BACKLOG);
 
     if (status == -1) {
-        fprintf(stderr, "server warning : unable to set socket options\n");
+        fprintf(stderr, "server error : unable to listen with socket\n");
+        close(sockfd);
+        freeaddrinfo(res);
+        exit(1);
     }
+   
+    struct sockaddr_storage cli_sockaddr;
+    socklen_t cli_addrlen;
+    int cli_sockfd;
+    
+    cli_sockfd = accept(sockfd, (struct sockaddr *)&cli_sockaddr,
+                        &cli_addrlen);
+    
+    printf("client socket: %d\n", cli_sockfd);
 
+    close(sockfd);
+    close(cli_sockfd);
     freeaddrinfo(res);
+
 }
