@@ -1,3 +1,9 @@
+/*
+ * Contains the code for creating the server and client sockets and allowing
+ * the server to listen for client connections. Essentially, this creates the
+ * server.
+ */
+
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,6 +11,8 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#include "net.h"
 
 #define PORT "3000"
 #define BACKLOG (10)
