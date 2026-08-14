@@ -5,7 +5,7 @@
 
 #include <stdlib.h>
 
-#include "read_file.h"
+#include "process_file.h"
 
 /*
  * Dynamically allocates a file_content_t struct.
