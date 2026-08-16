@@ -1,6 +1,6 @@
 /*
  * This file contains code to deal with HTTP requests and responses, including
- * parsing request values and forming responses.
+ * parsing requests and forming responses.
  */
 
 #include <stdio.h>
@@ -9,25 +9,49 @@
 #include <time.h>
 
 #include "http.h"
+#include "mime.h"
+#include "process_file.h"
 
 #define DATE_LEN (30)         /* length of date string in HTTP header */
+#define METHOD_LEN (20)       /* max length of HTTP method  */
 #define REQ_LEN (64 * 1024)   /* max length of HTTP request (64kb) */
 #define RES_LEN (100 * 1024)  /* max length of HTTP response (100kb) */
-#define METHOD_LEN (20)       /* max length of HTTP method  */
 #define RESOURCE_LEN (1024)   /* max length of request resource */
 #define REQ_VALS_CT (2)       /* num of vals to be extracted from valid req */
 
+#define SERVER_FILES "./root"
+
+#define HTTP_GET(response, mime, content, size)                          \
+        create_http_response(response, "HTTP/1.1 200 OK", mime, content, \
+                             size)                                       \
+
 /*
- * Header
+ * This function creates an HTTP response, putting it into the given response
+ * argument. The HTTP response starts with the given header line, some
+ * additional metadata, and then adds the given content.
  */
 
-void create_http_response(char *response, char *header) {
+int create_http_response(char *response, char *header, char *mime,
+                         char *content, int size) {
+    int amt = 0;
+
+    /* formats date ie. Sun, 16 Aug 2026 14:48:37 GMT */
+
     time_t secs = time(NULL);              /* time in secs */
     struct tm *curr_time = gmtime(&secs);  /* time in GMT */
     char date[DATE_LEN] = { '\0' };
-    strftime(date, sizeof(date), "%a, %d %b %Y %T GMT", curr_time);
+    amt += strftime(date, sizeof(date), "%a, %d %b %Y %T GMT", curr_time) + 1;
 
-    sprintf(response, "%s\n%s\n", header, date);
+    printf("size ime format: %d\n", size-1);
+
+    amt += snprintf(response, RES_LEN,
+            "%s\n"                  /* HTTP status code */
+            "Date: %s\n"            /* current date in specific format */
+            "Connection: close\n"   /* tells browser to close TCP connection */
+            "Content-Length: %d\n"  /* does not include header */
+            "Content-Type: %s\n\n"  /* mime type */
+            "%s",
+            header, date, size, mime, content) + 1;
 } /* create_http_response() */
 
 /*
@@ -39,9 +63,15 @@ void create_http_response(char *response, char *header) {
 int parse_http_request(char *request, char *method, char *resource) {
     int status;
 
-    /* extract request's method and desired resource */
+    /* requested resource starts with / so combine with SERVER_FILES to form */
+    /* proper relative path */
 
-    status = sscanf(request, "%19[^ ] %1023[^ ]", method, resource);
+    char tmp_resource[RESOURCE_LEN] = { '\0' };
+    status = sscanf(request, "%19[^ ] %1023[^ ]", method, tmp_resource);
+
+    /* combined tmp_resource here to form proper relative path */
+
+    snprintf(resource, RESOURCE_LEN, "%s%s", SERVER_FILES, tmp_resource);
 
     /* zero if successfully extracted both values */
 
@@ -59,6 +89,7 @@ void handle_http_request(int client_socket) {
 
     if (recv_bytes == -1) {
        fprintf(stderr, "[ERROR] unable to read HTTP request\n"); 
+       return;
     }
 
     if (recv_bytes == 0) {  /* indicates client closed connection */
@@ -88,7 +119,22 @@ void handle_http_response(int client_socket, char *method, char *resource,
     }
 
     if (strcmp("GET", method) == 0) {
-        create_http_response(response, "HTTP/1.1 200 OK");
+        file_cont_t *file_cont = read_file_cont(resource);
+
+        printf("%p\n", file_cont);
+
+        if (file_cont == NULL) {  /* indicates server error or file doesn't exist */
+            // send server error response maybe make it a macro
+            printf("[ERROR] unable to get resource\n");
+            return;
+        }
+
+        char *mime = get_mime_type(resource);
+
+        // make it return length for send()
+        int num = create_http_response(response, "HTTP/1.1 200 OK", mime, 
+                             file_cont->content, file_cont->size);
+        send(client_socket, response, num, 0);
     } else if (strcmp("POST", method) == 0) {
 
     } else {
