@@ -16,7 +16,7 @@
 #define METHOD_LEN (20)       /* max length of HTTP method  */
 #define REQ_LEN (64 * 1024)   /* max length of HTTP request (64kb) */
 #define RES_LEN (100 * 1024)  /* max length of HTTP response (100kb) */
-#define RESOURCE_LEN (1024)   /* max length of request resource */
+#define TARGET_LEN (1024)     /* max length of request's target */
 #define REQ_VALS_CT (2)       /* num of vals to be extracted from valid req */
 
 #define SERVER_FILES "./root"
@@ -28,50 +28,74 @@
 /*
  * This function creates an HTTP response, putting it into the given response
  * argument. The HTTP response starts with the given header line, some
- * additional metadata, and then adds the given content.
+ * additional metadata, and then adds the given content. It returns the total
+ * size of the HTTP response to be used in send().
  */
 
 int create_http_response(char *response, char *header, char *mime,
                          char *content, int size) {
-    int amt = 0;
+    int status; 
+    int tot_bytes = 0;
 
-    /* formats date ie. Sun, 16 Aug 2026 14:48:37 GMT */
+    /* formats date like Sun, 16 Aug 2026 14:48:37 GMT */
 
-    time_t secs = time(NULL);              /* time in secs */
-    struct tm *curr_time = gmtime(&secs);  /* time in GMT */
+    time_t secs = time(NULL);  /* time in secs since 1970 */
+
+    if (secs == -1) {
+        fprintf(stderr, "[WARNING] unable to get time with time()...will leave"
+                        "date blank in HTTP response");
+    }
+
+    struct tm *curr_time = NULL;
+
+    if (secs != -1) {
+        curr_time = gmtime(&secs);  /* time in GMT */
+
+        if (curr_time == NULL) {
+            fprintf(stderr, "[WARNING] unable to transform time with gmtime()"
+                            "...will leave date blaink in HTTP response");
+        }
+    }
+
     char date[DATE_LEN] = { '\0' };
-    amt += strftime(date, sizeof(date), "%a, %d %b %Y %T GMT", curr_time) + 1;
+    
+    if ((secs != -1) && (curr_time != NULL)) {
+        /* add 1 because returns number bytes written excluding NUL byte */
 
-    printf("size ime format: %d\n", size-1);
+        tot_bytes += strftime(date, sizeof(date), "%a, %d %b %Y %T GMT",
+                              curr_time) + 1;
+    }
 
-    amt += snprintf(response, RES_LEN,
-            "%s\n"                  /* HTTP status code */
-            "Date: %s\n"            /* current date in specific format */
-            "Connection: close\n"   /* tells browser to close TCP connection */
-            "Content-Length: %d\n"  /* does not include header */
-            "Content-Type: %s\n\n"  /* mime type */
-            "%s",
-            header, date, size, mime, content) + 1;
+    tot_bytes += snprintf(response, RES_LEN,
+                          "%s\n"                  /* HTTP status code */
+                          "Date: %s\n"            /* formatted date */
+                          "Connection: close\n"   /* close TCP connection */
+                          "Content-Length: %d\n"  /* not including header */
+                          "Content-Type: %s\n\n"  /* mime type */
+                          "%s",                   /* content */
+                          header, date, size, mime, content) + 1;
+
+    return tot_bytes;
 } /* create_http_response() */
 
 /*
- * This function extracts the request's method and desired resource. On 
+ * This function extracts the request's method and desired target. On 
  * success, this function returns zero. Invalid extractions return a non-zero
  * value to indicate a malformed request.
  */
 
-int parse_http_request(char *request, char *method, char *resource) {
+int parse_http_request(char *request, char *method, char *target) {
     int status;
 
-    /* requested resource starts with / so combine with SERVER_FILES to form */
+    /* requested target starts with / so combine with SERVER_FILES to form */
     /* proper relative path */
 
-    char tmp_resource[RESOURCE_LEN] = { '\0' };
-    status = sscanf(request, "%19[^ ] %1023[^ ]", method, tmp_resource);
+    char tmp_target[TARGET_LEN] = { '\0' };
+    status = sscanf(request, "%19[^ ] %1023[^ ]", method, tmp_target);
 
-    /* combined tmp_resource here to form proper relative path */
+    /* combined tmp_target here to form proper relative path */
 
-    snprintf(resource, RESOURCE_LEN, "%s%s", SERVER_FILES, tmp_resource);
+    snprintf(target, TARGET_LEN, "%s%s", SERVER_FILES, tmp_target);
 
     /* zero if successfully extracted both values */
 
@@ -99,18 +123,18 @@ void handle_http_request(int client_socket) {
     request[recv_bytes] = '\0'; 
 
     char method[METHOD_LEN] = { '\0' };      /* HTTP method ie. GET, POST */
-    char resource[RESOURCE_LEN] = { '\0' };  /* requested resource */
+    char target[TARGET_LEN] = { '\0' };  /* requested target */
 
-    int status = parse_http_request(request, method, resource);
+    int status = parse_http_request(request, method, target);
 
-    handle_http_response(client_socket, method, resource, status);
+    handle_http_response(client_socket, method, target, status);
 } /* handle_http_request() */
 
 /*
  * Test
  */
 
-void handle_http_response(int client_socket, char *method, char *resource,
+void handle_http_response(int client_socket, char *method, char *target,
                           int status) {
     char response[RES_LEN] = { '\0' };
 
@@ -119,17 +143,17 @@ void handle_http_response(int client_socket, char *method, char *resource,
     }
 
     if (strcmp("GET", method) == 0) {
-        file_cont_t *file_cont = read_file_cont(resource);
+        file_cont_t *file_cont = read_file_cont(target);
 
         printf("%p\n", file_cont);
 
         if (file_cont == NULL) {  /* indicates server error or file doesn't exist */
             // send server error response maybe make it a macro
-            printf("[ERROR] unable to get resource\n");
+            printf("[ERROR] unable to get target\n");
             return;
         }
 
-        char *mime = get_mime_type(resource);
+        char *mime = get_mime_type(target);
 
         // make it return length for send()
         int num = create_http_response(response, "HTTP/1.1 200 OK", mime, 
@@ -143,7 +167,7 @@ void handle_http_response(int client_socket, char *method, char *resource,
 
     printf("client sock: %d\n", client_socket);
     printf("method: %s\n", method);
-    printf("resource: %s\n", resource);
+    printf("target: %s\n", target);
     printf("whole thing...\n");
     printf("%s\n", response);
 } /* handle_http_response() */
