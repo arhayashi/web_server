@@ -22,6 +22,8 @@
 #define SERVER_FILES "./root"
 
 #define SERVER_ERR (-1)
+#define SERVER_WARN (0)
+#define SERVER_SUCC (1)
 
 #define HTTP_GET(response, mime, content, size)                          \
         create_http_response(response, "HTTP/1.1 200 OK", mime, content, \
@@ -104,27 +106,32 @@ int create_http_response(char *response, char *header, char *mime,
 } /* create_http_response() */
 
 /*
- * This function extracts the request's method and desired target. On 
- * success, this function returns zero. Invalid extractions return a non-zero
- * value to indicate a malformed request.
+ * This function extracts the request's method and target. On 
+ * success, this function returns SERVER_SUCC. Invalid extractions return
+ * SERVER_ERR to indicate a malformed HTTP request.
  */
 
 int parse_http_request(char *request, char *method, char *target) {
     int status;
 
-    /* requested target starts with / so combine with SERVER_FILES to form */
-    /* proper relative path */
-
     char tmp_target[TARGET_LEN] = { '\0' };
+
     status = sscanf(request, "%19[^ ] %1023[^ ]", method, tmp_target);
 
-    /* combined tmp_target here to form proper relative path */
+    if (status != REQ_VALS_CT) {
+        return SERVER_ERR;
+    }
 
-    snprintf(target, TARGET_LEN, "%s%s", SERVER_FILES, tmp_target);
+    /* forms proper relative path to the files the server plans to serve */
 
-    /* zero if successfully extracted both values */
+    status = snprintf(target, TARGET_LEN, "%s%s", SERVER_FILES, tmp_target);
 
-    return status - REQ_VALS_CT;
+    if (status >= TARGET_LEN) {
+        fprintf(stderr, "[WARNING] requested target is too long...truncating"
+                "target\n");
+    }
+
+    return SERVER_SUCC;
 } /* parse_http_request() */
 
 /*
@@ -163,7 +170,7 @@ void handle_http_response(int client_socket, char *method, char *target,
                           int status) {
     char response[RES_LEN] = { '\0' };
 
-    if (status != 0) {  /* indicates malformed request */
+    if (status != SERVER_SUCC) {  /* indicates malformed request */
         // TODO: send 400 response
     }
 
