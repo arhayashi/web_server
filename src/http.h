@@ -2,7 +2,7 @@
 
 #define HTTP_H
 
-void create_http_response(char *, char *);
+int create_http_response(char *, char *, char *, char *, int);
 void handle_http_request(int);
 void handle_http_response(int, char *, char *, int);
 int parse_http_request(char *, char *, char *);
