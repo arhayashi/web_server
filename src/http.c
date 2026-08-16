@@ -21,6 +21,8 @@
 
 #define SERVER_FILES "./root"
 
+#define SERVER_ERR (-1)
+
 #define HTTP_GET(response, mime, content, size)                          \
         create_http_response(response, "HTTP/1.1 200 OK", mime, content, \
                              size)                                       \
@@ -29,7 +31,8 @@
  * This function creates an HTTP response, putting it into the given response
  * argument. The HTTP response starts with the given header line, some
  * additional metadata, and then adds the given content. It returns the total
- * size of the HTTP response to be used in send().
+ * size of the HTTP response to be used in send() or SERVER_ERR in case of
+ * unrecoverable error.
  */
 
 int create_http_response(char *response, char *header, char *mime,
@@ -42,7 +45,7 @@ int create_http_response(char *response, char *header, char *mime,
     time_t secs = time(NULL);  /* time in secs since 1970 */
 
     if (secs == -1) {
-        fprintf(stderr, "[WARNING] unable to get time with time()...will leave"
+        fprintf(stderr, "[WARNING] unable to get time with time()...leaving"
                         "date blank in HTTP response");
     }
 
@@ -53,7 +56,7 @@ int create_http_response(char *response, char *header, char *mime,
 
         if (curr_time == NULL) {
             fprintf(stderr, "[WARNING] unable to transform time with gmtime()"
-                            "...will leave date blaink in HTTP response");
+                            "...leaving date blank in HTTP response");
         }
     }
 
@@ -62,18 +65,40 @@ int create_http_response(char *response, char *header, char *mime,
     if ((secs != -1) && (curr_time != NULL)) {
         /* add 1 because returns number bytes written excluding NUL byte */
 
-        tot_bytes += strftime(date, sizeof(date), "%a, %d %b %Y %T GMT",
-                              curr_time) + 1;
+        status = strftime(date, sizeof(date), "%a, %d %b %Y %T GMT",
+                          curr_time) + 1;
+
+        if (status == 0) {
+            fprintf(stderr, "[WARNING] date too long...leaving date blank in"
+                    "HTTP response");
+        }
+
+        tot_bytes += status;
     }
 
-    tot_bytes += snprintf(response, RES_LEN,
-                          "%s\n"                  /* HTTP status code */
-                          "Date: %s\n"            /* formatted date */
-                          "Connection: close\n"   /* close TCP connection */
-                          "Content-Length: %d\n"  /* not including header */
-                          "Content-Type: %s\n\n"  /* mime type */
-                          "%s",                   /* content */
-                          header, date, size, mime, content) + 1;
+    status = snprintf(response, RES_LEN,
+                      "%s\n"                  /* HTTP status code */
+                      "Date: %s\n"            /* formatted date */
+                      "Connection: close\n"   /* close TCP connection */
+                      "Content-Length: %d\n"  /* not including header */
+                      "Content-Type: %s\n\n"  /* mime type */
+                      "%s",                   /* content */
+                      header, date, size, mime, content) + 1;
+
+    if (status == -1) {
+        fprintf(stderr, "[ERROR] unable to create HTTP response with"
+                "snprintf()\n");
+
+        return SERVER_ERR;
+    }
+    else if (status >= RES_LEN) {
+        fprintf(stderr, "[WARNING] HTTP response too long...truncating"
+                "response\n");
+
+        return RES_LEN;
+    }
+
+    tot_bytes += status;
 
     return tot_bytes;
 } /* create_http_response() */
