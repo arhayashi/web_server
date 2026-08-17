@@ -25,9 +25,74 @@
 #define SERVER_WARN (0)
 #define SERVER_SUCC (1)
 
-#define HTTP_GET(response, mime, content, size)                          \
-        create_http_response(response, "HTTP/1.1 200 OK", mime, content, \
-                             size)                                       \
+/*
+ * This function verifies that an HTTP response was successfully created,
+ * returning status if it was. If it wasn't, this function attempts to
+ * create a HTTP 500 response and put it into the response argument. If that
+ * wasn't successfully created, a critical error occured and the function
+ * returns SERVER_ERR. If the HTTP 500 response was successfully created, then
+ * status is returned, which is now the size of the HTTP 500 response. The
+ * status argument contains the return value of the HTTP response that was
+ * attempted to be created and is being error checked.
+ */
+
+int check_http_res(char *response, int status) {
+    if (status != SERVER_ERR) {
+        return status;
+    }
+
+    status = http_500(response);
+
+    if (status == SERVER_ERR) {
+        fprintf(stderr, "[ERROR] could not create an HTTP 500 Internal Server "
+                        "Error response...critical error\n");
+        return SERVER_ERR;
+    }
+
+    fprintf(stderr, "[WARNING] response now contains an HTTP 500 Internal "
+                    " Server Error response\n");
+
+    return status;
+} /* check_http_res() */
+
+/*
+ * Creates a HTTP 400 Bad Request response, putting it into the response
+ * argument. 
+ */
+
+int http_400(char *response) {
+    fprintf(stderr, "[WARNING] sending HTTP 400 Bad Request response\n");
+
+    char *header = "HTTP/1.1 400 Bad Request";
+    char *content = "{\n"
+                    "   \"error\": \"Bad Request\",\n"
+                    "   \"message\": \"Request body could not be "
+                    "read properly\"\n"
+                    "}";
+
+    return create_http_response(response, header, "application/json", content,
+                                strlen(content) + 1);
+} /* http_400() */
+
+/*
+ * Creates a HTTP 500 Internal Server Error response, putting it into the
+ * response argument.
+ */
+
+int http_500(char *response) {
+    fprintf(stderr, "[WARNING] sending HTTP 500 Internal Server Error "
+            "response\n");
+
+    char *header = "HTTP/1.1 500 Internal Server Error";
+    char *content = "{\n"
+                    "   \"error\": \"Internal Server Error\",\n"
+                    "   \"message\": \"Server encountered critical error and "
+                    "could not recover\"\n"
+                    "}";
+
+    return create_http_response(response, header, "application/json", content,
+                                strlen(content) + 1);
+} /* http_500() */
 
 /*
  * This function creates an HTTP response, putting it into the given response
@@ -90,13 +155,11 @@ int create_http_response(char *response, char *header, char *mime,
     if (status == -1) {
         fprintf(stderr, "[ERROR] unable to create HTTP response with"
                 "snprintf()\n");
-
         return SERVER_ERR;
     }
     else if (status >= RES_LEN) {
         fprintf(stderr, "[WARNING] HTTP response too long...truncating"
                 "response\n");
-
         return RES_LEN;
     }
 
@@ -106,12 +169,11 @@ int create_http_response(char *response, char *header, char *mime,
 } /* create_http_response() */
 
 /*
- * This function extracts the request's method and target. On 
- * success, this function returns SERVER_SUCC. Invalid extractions return
- * SERVER_ERR to indicate a malformed HTTP request.
+ * This function extracts the request's method and target, putting them into
+ * the method and target pointer arguments.
  */
 
-int parse_http_request(char *request, char *method, char *target) {
+void parse_http_request(char *request, char *method, char *target) {
     int status;
 
     char tmp_target[TARGET_LEN] = { '\0' };
@@ -119,7 +181,9 @@ int parse_http_request(char *request, char *method, char *target) {
     status = sscanf(request, "%19[^ ] %1023[^ ]", method, tmp_target);
 
     if (status != REQ_VALS_CT) {
-        return SERVER_ERR;
+        fprintf(stderr, "[ERROR] could not parse HTTP request...sending 400"
+                "Bad Request\n");
+        return;
     }
 
     /* forms proper relative path to the files the server plans to serve */
@@ -130,8 +194,6 @@ int parse_http_request(char *request, char *method, char *target) {
         fprintf(stderr, "[WARNING] requested target is too long...truncating"
                 "target\n");
     }
-
-    return SERVER_SUCC;
 } /* parse_http_request() */
 
 /*
@@ -139,39 +201,59 @@ int parse_http_request(char *request, char *method, char *target) {
  */
 
 void handle_http_request(int client_socket) {
-    char request[REQ_LEN] = { '\0' };  /* holds client's HTTP request */
+    int status;
+
+    char request[REQ_LEN] = { '\0' };
 
     int recv_bytes = recv(client_socket, request, REQ_LEN - 1, 0);
 
     if (recv_bytes == -1) {
-       fprintf(stderr, "[ERROR] unable to read HTTP request\n"); 
+       fprintf(stderr, "[ERROR] unable to read HTTP request with recv()\n"); 
        return;
     }
 
     if (recv_bytes == 0) {  /* indicates client closed connection */
+        printf("[LOG] client closed connection\n");
         return;
     }
 
     request[recv_bytes] = '\0'; 
 
-    char method[METHOD_LEN] = { '\0' };      /* HTTP method ie. GET, POST */
+    char method[METHOD_LEN] = { '\0' };  /* HTTP method ie. GET, POST */
     char target[TARGET_LEN] = { '\0' };  /* requested target */
 
-    int status = parse_http_request(request, method, target);
+    /* method or target will be empty if malformed request */
+    /* checked in handle_http_response */
 
-    handle_http_response(client_socket, method, target, status);
+    parse_http_request(request, method, target);
+
+    handle_http_response(client_socket, method, target);
 } /* handle_http_request() */
 
 /*
  * Test
  */
 
-void handle_http_response(int client_socket, char *method, char *target,
-                          int status) {
+void handle_http_response(int client_socket, char *method, char *target) {
+    int status;
     char response[RES_LEN] = { '\0' };
 
-    if (status != SERVER_SUCC) {  /* indicates malformed request */
-        // TODO: send 400 response
+    /* true if parsing request failed */
+
+    if ((strlen(method) == 0) || (strlen(target) == 0)) {
+        /* send HTTP 400 response and check if created successfully */
+
+        status = check_http_res(response, http_400(response));
+
+        if (status == SERVER_ERR) {
+            return;
+        }
+
+        /* status is the size if successfully created response */
+
+        send_response(client_socket, response, status);
+
+        return;
     }
 
     if (strcmp("GET", method) == 0) {
@@ -203,3 +285,28 @@ void handle_http_response(int client_socket, char *method, char *target,
     printf("whole thing...\n");
     printf("%s\n", response);
 } /* handle_http_response() */
+
+/*
+ * This function takes in a response and the size of a response and sends it
+ * to the client given by the file descriptor. It loops until the full response
+ * is sent.
+ */
+
+void send_response(int fd, char *response, int size) {
+    int status;
+    int bytes_sent = 0;
+
+    while (bytes_sent < size) {
+        status = send(fd, response, size - bytes_sent, 0);
+
+        if (status == -1) {
+            fprintf(stderr, "[ERROR] error while sending response with "
+                    "send()\n");
+            return;
+        }
+
+        bytes_sent += status;
+        response += status;
+    }
+
+} /* send_response() */
