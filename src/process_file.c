@@ -14,6 +14,10 @@
  */
 
 void close_file(FILE **fd) {
+    if (fd == NULL) {
+        return;
+    }
+
     fclose(*fd);
     *fd = NULL;
 } /* close_file() */
@@ -26,7 +30,7 @@ file_cont_t *create_file_cont_t() {
     file_cont_t *file_cont = malloc(sizeof(file_cont_t));
 
     if (file_cont == NULL) {
-        fprintf(stderr, "[ERROR] unable to create file_cont_t struct\n");
+        fprintf(stderr, "[ERROR] unable to allocate file_cont_t struct\n");
         return NULL;
     }
 
@@ -41,6 +45,10 @@ file_cont_t *create_file_cont_t() {
  */
 
 void free_file_cont_t(file_cont_t **file_cont) {
+    if (file_cont == NULL) {
+        return;
+    }
+
     free((*file_cont)->content);
     free(*file_cont);
     *file_cont = NULL;
@@ -116,14 +124,3 @@ file_cont_t *read_file_cont(char *file) {
 
     return file_cont;
 } /* read_file() */
-
-#if 0
-int main() {
-    /* quick test */
-
-    file_cont_t *file_cont = read_file_cont("net.h");
-    printf("size = %d\n", file_cont->size);
-    printf("content: \n%s", file_cont->content);
-}
-
-#endif
