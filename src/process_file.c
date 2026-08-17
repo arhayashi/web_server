@@ -26,16 +26,17 @@ void close_file(FILE **fd) {
  * Dynamically allocates a file_content_t struct.
  */
 
-file_cont_t *create_file_cont_t() {
+file_cont_t *create_file_cont_t(int size, void *content) {
     file_cont_t *file_cont = malloc(sizeof(file_cont_t));
 
     if (file_cont == NULL) {
-        fprintf(stderr, "[ERROR] unable to allocate file_cont_t struct\n");
+        fprintf(stderr, "[ERROR] unable to allocate space for file_cont_t"
+                "struct\n");
         return NULL;
     }
 
-    file_cont->size = 0;
-    file_cont->content = NULL;
+    file_cont->size = size;
+    file_cont->content = content;
 
     return file_cont;
 } /* create_file_cont_t() */
@@ -56,16 +57,26 @@ void free_file_cont_t(file_cont_t **file_cont) {
 
 /*
  * Returns a pointer to a dynamically allocated, filled in file_cont_t struct.
+ * The indicator is set to FILE_ERR if any issues related to reading the file
+ * or storing its contents were encountered. It is set to FILE_NEXIS if the
+ * file doesn't exist or have correct read permissions. On success, it is set
+ * to FILE_SUCC.
  */
 
-file_cont_t *read_file_cont(char *file) {
-    printf("%s\n", file);
+file_cont_t *read_file_cont(char *file, int *indicator) {
+    if (file == NULL) {
+        fprintf(stderr, "[ERROR] file name is NULL\n");
+        *indicator = FILE_ERR;
+        return NULL;
+    }
+
     int status;
 
     FILE *fd = fopen(file, "rb");
 
     if (fd == NULL) {
-        fprintf(stderr, "[ERROR] unable to open file for reading\n");
+        fprintf(stderr, "[WARNING] file unable to be read or doesn't exist\n");
+        *indicator = FILE_NEXS;
         return NULL;
     }
 
@@ -73,22 +84,25 @@ file_cont_t *read_file_cont(char *file) {
     status = stat(file, &file_stats);
 
     if (status == -1) {
-        fprintf(stderr, "[ERROR] unable to get file stats\n");
+        fprintf(stderr, "[WARNING] unable to obtain file stats\n");
+        *indicator = FILE_NEXS;
         close_file(&fd);
         return NULL;
     }
 
     if (!(file_stats.st_mode & S_IFREG)) {  /* mode is bitfield */
         fprintf(stderr, "[ERROR] attempting to access non-regular file\n");
+        *indicator = FILE_ERR;
         close_file(&fd);
         return NULL;
     }
 
     int file_size = (int)file_stats.st_size;  /* original file size in bytes */
-    void *buff = calloc(1, file_size);        /* store read content */
+    void *buff = calloc(1, file_size);        /* store file content */
 
     if (buff == NULL) {
-        fprintf(stderr, "[ERROR] failed malloc to store file size\n");
+        fprintf(stderr, "[ERROR] unable to allocate space for file content\n");
+        *indicator = FILE_ERR;
         close_file(&fd);
         return NULL;
     }
@@ -104,23 +118,32 @@ file_cont_t *read_file_cont(char *file) {
 
     while (((status = fread(buf_pos, 1, file_size - read_size, fd)) != 0) &&
            (read_size < file_size)) {
-        /* status stores number of bytes read here */
+        /* status stores number of bytes that were read */
 
         buf_pos += status;
         read_size += status;
     }
 
     if (ferror(fd)) {
-        fprintf(stderr, "[ERROR] unable to read from file\n");
+        fprintf(stderr, "[ERROR] encountered error while reading from file\n");
+        *indicator = FILE_ERR;
         close_file(&fd);
         free(buff);
         return NULL;
     }
 
-    file_cont_t *file_cont = create_file_cont_t();
+    file_cont_t *file_cont = create_file_cont_t(read_size, buff);
 
-    file_cont->size = read_size;
-    file_cont->content = buff;
+    if (file_cont == NULL) {
+        /* error for failed malloc inside function call */
 
+        *indicator = FILE_ERR;
+        close_file(&fd);
+        free(buff);
+        return NULL;
+    }
+
+    *indicator = FILE_SUCC;
+    
     return file_cont;
 } /* read_file() */
