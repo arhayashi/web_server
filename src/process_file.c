@@ -51,6 +51,7 @@ void free_file_cont_t(file_cont_t **file_cont) {
  */
 
 file_cont_t *read_file_cont(char *file) {
+    printf("%s\n", file);
     int status;
 
     FILE *fd = fopen(file, "rb");
@@ -76,7 +77,7 @@ file_cont_t *read_file_cont(char *file) {
     }
 
     int file_size = (int)file_stats.st_size;  /* original file size in bytes */
-    void *buff = malloc(file_size);           /* store read content */
+    void *buff = calloc(1, file_size);        /* store read content */
 
     if (buff == NULL) {
         fprintf(stderr, "[ERROR] failed malloc to store file size\n");
@@ -93,7 +94,7 @@ file_cont_t *read_file_cont(char *file) {
     /* second condition ensures that don't write past buff in the case where */
     /* file is written to while reading where the file size would increase */
 
-    while (((status = fread(buf_pos, 1, file_size, fd)) != 0) &&
+    while (((status = fread(buf_pos, 1, file_size - read_size, fd)) != 0) &&
            (read_size < file_size)) {
         /* status stores number of bytes read here */
 
@@ -124,4 +125,5 @@ int main() {
     printf("size = %d\n", file_cont->size);
     printf("content: \n%s", file_cont->content);
 }
+
 #endif
