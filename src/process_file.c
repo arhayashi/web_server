@@ -46,7 +46,7 @@ file_cont_t *create_file_cont_t(int size, void *content) {
  */
 
 void free_file_cont_t(file_cont_t **file_cont) {
-    if (file_cont == NULL) {
+    if ((file_cont == NULL) || (*file_cont == NULL)) {
         return;
     }
 
@@ -58,14 +58,14 @@ void free_file_cont_t(file_cont_t **file_cont) {
 /*
  * Returns a pointer to a dynamically allocated, filled in file_cont_t struct.
  * The indicator is set to FILE_ERR if any issues related to reading the file
- * or storing its contents were encountered. It is set to FILE_NEXIS if the
+ * or storing its contents were encountered. It is set to FILE_NEXS if the
  * file doesn't exist or have correct read permissions. On success, it is set
  * to FILE_SUCC.
  */
 
 file_cont_t *read_file_cont(char *file, int *indicator) {
     if (file == NULL) {
-        fprintf(stderr, "[ERROR] file name is NULL\n");
+        fprintf(stderr, "[ERROR] file name not given\n");
         *indicator = FILE_ERR;
         return NULL;
     }
@@ -80,17 +80,30 @@ file_cont_t *read_file_cont(char *file, int *indicator) {
         return NULL;
     }
 
+    /* get info about the file like its size and type */
+
     struct stat file_stats;
     status = stat(file, &file_stats);
 
     if (status == -1) {
         fprintf(stderr, "[WARNING] unable to obtain file stats\n");
-        *indicator = FILE_NEXS;
+        *indicator = FILE_ERR;
         close_file(&fd);
         return NULL;
     }
 
-    if (!(file_stats.st_mode & S_IFREG)) {  /* mode is bitfield */
+    /* if directory, will try to access dir/index.html in http.c */
+
+    if (S_ISDIR(file_stats.st_mode)) {
+        fprintf(stderr, "[WARNING] attempting to access directory\n");
+        *indicator = FILE_DIR
+        close_file(&fd);
+        return NULL;
+    }
+
+    /* ie. symbolic links */
+
+    if (!S_ISREG(file_stats.st_mode)) {
         fprintf(stderr, "[ERROR] attempting to access non-regular file\n");
         *indicator = FILE_ERR;
         close_file(&fd);
