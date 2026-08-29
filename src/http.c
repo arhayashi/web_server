@@ -271,12 +271,18 @@ void parse_http_request(char *request, char *method, char *target) {
     status = sscanf(request, "%19[^ ] %1023[^ ]", method, tmp_target);
 
     if (status != REQ_VALS_CT) {
-        fprintf(stderr, "[ERROR] could not parse HTTP request...sending 400"
-                "Bad Request\n");
+        fprintf(stderr, "[ERROR] unable to parse HTTP request\n");
         return;
     }
 
     /* forms proper relative path to the files the server plans to serve */
+
+    /* solves issue of adding / to ./root ie. prevents ./root/ */
+    /* which may result in ./root//index.html for auto serving index.html */
+
+    if (strncmp(tmp_target, "/", TARGET_LEN) == 0) {
+        tmp_target[0] = '\0';
+    }
 
     status = snprintf(target, TARGET_LEN, "%s%s", SERVER_FILES, tmp_target);
 
