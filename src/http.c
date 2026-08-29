@@ -12,16 +12,18 @@
 #include "mime.h"
 #include "process_file.h"
 
-#define DATE_LEN (30)         /* length of date string in HTTP header */
-#define METHOD_LEN (20)       /* max length of HTTP method  */
-#define REQ_LEN (64 * 1024)   /* max length of HTTP request (64kb) */
-#define RES_LEN (100 * 1024)  /* max length of HTTP response (100kb) */
-#define TARGET_LEN (1024)     /* max length of request's target */
-#define REQ_VALS_CT (2)       /* num of vals to be extracted from valid req */
+#define DATE_LEN    (30)         /* length of date string in HTTP header */
+#define METHOD_LEN  (20)         /* max length of HTTP method  */
+#define REQ_LEN     (64 * 1024)  /* max length of HTTP request (64kb) */
+#define RES_LEN     (100 * 1024) /* max length of HTTP response (100kb) */
+#define TARGET_LEN  (1024)       /* max length of request's target */
+#define REQ_VALS_CT (2)          /* num of vals to be extrctd from valid req */
 
 #define SERVER_FILES "./root"
+#define DEFAULT_FILE "/index.html"
+#define FILE_404     SERVER_FILES "/404.html"
 
-#define SERVER_ERR (-1)
+#define SERVER_ERR  (-1)
 #define SERVER_WARN (0)
 #define SERVER_SUCC (1)
 
@@ -56,6 +58,72 @@ int check_http_res(char *response, int status) {
 } /* check_http_res() */
 
 /*
+ * Creates a HTTP 200 OK response, putting it into the response argument.
+ */
+
+int http_200(char *response, char *target, file_cont_t **file_cont) {
+    int status;
+    char *header = "HTTP/1.1 200 OK";
+
+    *file_cont = read_file_cont(target, &status);
+
+    printf("1. %p\n", file_cont);
+    printf("2. %p\n", *file_cont);
+
+    /* HTTP 200 OK if file exists */
+
+    if (*file_cont != NULL) {
+        printf("[LOG] sending HTTP 200 OK response\n");
+
+        char *mime = get_mime_type(target);
+        return create_http_response(response, header, mime,
+                                    (*file_cont)->content,
+                                    (*file_cont)->size);
+    } 
+
+    /* try again with .../index.html if requested target is a directory */
+
+    if (status == FILE_DIR) {
+        int remaining_size = (TARGET_LEN - strlen(target)) - 1;
+        char *new_target = strncat(target, DEFAULT_FILE, remaining_size);
+        printf("new target: %s\n", new_target);
+
+        *file_cont = read_file_cont(new_target, &status);
+
+        /* on success, send HTTP 200 OK */
+
+        if (*file_cont != NULL) {
+            printf("[LOG] sending HTTP 200 OK response\n");
+
+            char *mime = get_mime_type(new_target);
+            return create_http_response(response, header, mime,
+                    (*file_cont)->content,
+                    (*file_cont)->size);
+        }
+
+        /* otherwise, send HTTP 404 Not Found */
+
+        if (status == FILE_NEXS) {
+            return http_404(response, FILE_404, file_cont);
+        }
+
+        /* HTTP 500 Internal Server Error */
+
+        return SERVER_ERR;
+    }
+
+    if (status == FILE_NEXS) {
+            return http_404(response, FILE_404, file_cont);
+    }
+
+    if (status == FILE_ERR) {
+        return SERVER_ERR;
+    }
+
+    return SERVER_SUCC;
+} /* http_200() */
+
+/*
  * Creates a HTTP 400 Bad Request response, putting it into the response
  * argument. 
  */
@@ -73,6 +141,28 @@ int http_400(char *response) {
     return create_http_response(response, header, "application/json", content,
                                 strlen(content) + 1);
 } /* http_400() */
+
+/*
+ * Creates an HTTP 404 Not Found response, putting it into the response
+ * argument.
+ */
+
+int http_404(char *response, char *target, file_cont_t **file_cont) {
+    fprintf(stderr, "[WARNING] sending HTTP 404 Not Found response\n");
+
+    int status;
+    char *header = "HTTP/1.1 404 Not Found";
+    *file_cont = read_file_cont(target, &status);
+
+    if (*file_cont == NULL) {
+        return SERVER_ERR;
+    }
+
+    char *mime = get_mime_type(target);
+
+    return create_http_response(response, header, mime,
+                                (*file_cont)->content, (*file_cont)->size);
+} /* http_404() */
 
 /*
  * Creates a HTTP 500 Internal Server Error response, putting it into the
@@ -227,6 +317,8 @@ void handle_http_request(int client_socket) {
 
     parse_http_request(request, method, target);
 
+    printf("target: %s\n", target);
+
     handle_http_response(client_socket, method, target);
 } /* handle_http_request() */
 
@@ -238,52 +330,52 @@ void handle_http_response(int client_socket, char *method, char *target) {
     int status;
     char response[RES_LEN] = { '\0' };
 
-    /* true if parsing request failed */
+    /* true if parsing request failed which indicates malformed request */
 
     if ((strlen(method) == 0) || (strlen(target) == 0)) {
-        /* send HTTP 400 response and check if created successfully */
-
         status = check_http_res(response, http_400(response));
 
+        /* indicates unrecoverable server error so should terminate */
+
         if (status == SERVER_ERR) {
+            fprintf(stderr, "[ERROR] terminating in handle_http_response()\n");
             return;
         }
 
-        /* status is the size if successfully created response */
+        /* here, status is the size if successfully created response */
 
         send_response(client_socket, response, status);
 
         return;
     }
 
+    /* handle attempting to send HTTP 200 response or error response */
+
     if (strcmp("GET", method) == 0) {
-        file_cont_t *file_cont = read_file_cont(target);
+        file_cont_t *file_cont = NULL;
 
-        printf("%p\n", file_cont);
-
-        if (file_cont == NULL) {  /* indicates server error or file doesn't exist */
-            // send server error response maybe make it a macro
-            printf("[ERROR] unable to get target\n");
+        status = check_http_res(response,
+                                http_200(response, target, &file_cont));
+        if (status == SERVER_ERR) {
+            fprintf(stderr, "[ERROR] terminating in handle_http_response()\n");
+            free_file_cont_t(&file_cont);
             return;
         }
 
-        char *mime = get_mime_type(target);
+        /* here, status size of response */
 
-        // make it return length for send()
-        int num = create_http_response(response, "HTTP/1.1 200 OK", mime, 
-                             file_cont->content, file_cont->size);
-        send(client_socket, response, num, 0);
-    } else if (strcmp("POST", method) == 0) {
+        send_response(client_socket, response, status);
 
-    } else {
-        // 501 - not implemented
-    }
+        free_file_cont_t(&file_cont);
 
-    printf("client sock: %d\n", client_socket);
-    printf("method: %s\n", method);
-    printf("target: %s\n", target);
-    printf("whole thing...\n");
-    printf("%s\n", response);
+        return;
+    } 
+
+    /* handles POST response */
+
+    if (strcmp("POST", method) == 0) {
+
+    } 
 } /* handle_http_response() */
 
 /*
@@ -308,5 +400,4 @@ void send_response(int fd, char *response, int size) {
         bytes_sent += status;
         response += status;
     }
-
 } /* send_response() */

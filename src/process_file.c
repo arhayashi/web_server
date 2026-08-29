@@ -96,7 +96,7 @@ file_cont_t *read_file_cont(char *file, int *indicator) {
 
     if (S_ISDIR(file_stats.st_mode)) {
         fprintf(stderr, "[WARNING] attempting to access directory\n");
-        *indicator = FILE_DIR
+        *indicator = FILE_DIR;
         close_file(&fd);
         return NULL;
     }
