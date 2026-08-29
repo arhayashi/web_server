@@ -67,9 +67,6 @@ int http_200(char *response, char *target, file_cont_t **file_cont) {
 
     *file_cont = read_file_cont(target, &status);
 
-    printf("1. %p\n", file_cont);
-    printf("2. %p\n", *file_cont);
-
     /* HTTP 200 OK if file exists */
 
     if (*file_cont != NULL) {
@@ -86,7 +83,8 @@ int http_200(char *response, char *target, file_cont_t **file_cont) {
     if (status == FILE_DIR) {
         int remaining_size = (TARGET_LEN - strlen(target)) - 1;
         char *new_target = strncat(target, DEFAULT_FILE, remaining_size);
-        printf("new target: %s\n", new_target);
+
+        printf("[LOG] attempting to serve %s\n", new_target);
 
         *file_cont = read_file_cont(new_target, &status);
 
@@ -322,8 +320,6 @@ void handle_http_request(int client_socket) {
     /* checked in handle_http_response */
 
     parse_http_request(request, method, target);
-
-    printf("target: %s\n", target);
 
     handle_http_response(client_socket, method, target);
 } /* handle_http_request() */
