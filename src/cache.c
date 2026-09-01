@@ -1,5 +1,9 @@
 /*
- * This file contains
+ * This file contains functionality for a simple cache. To do so, a cache_t
+ * structure holds a doubly linked list and some meta data about the cache.
+ * Items that represent requested targets are added to the cache's doubly
+ * linked list so that the requested target's file does not have to be re-read.
+ * This makes receiving content much faster as IO is slow.
  */
 
 #include <stdio.h>
