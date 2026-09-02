@@ -14,22 +14,19 @@
 
 /*
  * This function creates the cache, taking in the maximum number of allowed
- * entries and the amount of time after which entries should expire.
+ * entries and the amount of time in seconds after which entries should expire.
  * It holds the head of the doubly linked list which holds the node_t
  * entries.
  */
 
 cache_t *create_cache(int capacity, int expr) {
-    cache_t *cache = malloc(sizeof(cache_t));
+    cache_t *cache = calloc(1, sizeof(cache_t));
 
     if (cache == NULL) {
         return NULL;
     }
 
-    cache->head = NULL;
-    cache->tail = NULL;
     cache->capacity = capacity;
-    cache->size = 0;
     cache->expr = expr;
 
     return cache;
@@ -41,17 +38,11 @@ cache_t *create_cache(int capacity, int expr) {
  */
 
 node_t *create_node_t(char *target, file_cont_t *content) {
-    node_t *node = malloc(sizeof(node_t));
+    node_t *node = calloc(1, sizeof(node_t));
 
     if (node == NULL) {
         return NULL;
     }
-
-    node->target = NULL;
-    node->content = NULL;
-    node->next = NULL;
-    node->prev = NULL;
-    node->created_at = 0;
 
     node->target = malloc(strlen(target) + 1);
 
@@ -65,7 +56,8 @@ node_t *create_node_t(char *target, file_cont_t *content) {
     strcpy(node->target, target);
 
     node->content = content;
-    node->created_at = 1;  /* change */
+
+    // time(&(node->created_at));
 
     return node;
 } /* create_node_t() */
