@@ -2,6 +2,8 @@
 
 #define CACHE_H
 
+#include <time.h>
+
 #include "process_file.h"
 
 typedef struct node_t {
@@ -9,7 +11,7 @@ typedef struct node_t {
     file_cont_t *content;
     struct node_t *next;
     struct node_t *prev;
-    int created_at;
+    time_t created_at;
 } node_t;
 
 typedef struct {
