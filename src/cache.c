@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "cache.h"
 
@@ -57,7 +58,13 @@ node_t *create_node_t(char *target, file_cont_t *content) {
 
     node->content = content;
 
-    // time(&(node->created_at));
+    time(&(node->created_at));
+
+    /* can still continue if getting time fails */
+
+    if (node->created_at == -1) {
+        fprintf(stderr, "[WARNING] error while retrieving time\n");
+    }
 
     return node;
 } /* create_node_t() */
@@ -156,8 +163,6 @@ void remove_from_cache(cache_t *cache) {
     cache->size -=1;
 } /* remove_from_cache() */
 
-# if 0
-
 int main(void) {
     cache_t *cache = create_cache(10, 0);
     node_t *p;
@@ -171,7 +176,7 @@ int main(void) {
     p = cache->head;
 
     while (p) {
-        printf("target: %s\n", p->target);
+        printf("target: %s time: %d\n", p->target, p->created_at);
         p = p->next;
     }
 
@@ -182,11 +187,9 @@ int main(void) {
     p = cache->head;
 
     while (p) {
-        printf("target: %s\n", p->target);
+        printf("target: %s time: %d\n", p->target, p->created_at);
         p = p->next;
     }
 
     delete_cache(&cache);
 }
-
-#endif
