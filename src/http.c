@@ -294,7 +294,8 @@ void parse_http_request(char *request, char *method, char *target) {
 } /* parse_http_request() */
 
 /*
- * Handles the HTTP request from the client
+ * Handles the HTTP request from the client by storing it in a buffer, parsing
+ * the method and requested target, and formulating an appropriate response.
  */
 
 void handle_http_request(int client_socket) {
