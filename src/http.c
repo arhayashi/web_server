@@ -265,6 +265,11 @@ int create_http_response(char *response, char *header, char *mime,
  */
 
 void parse_http_request(char *request, char *method, char *target) {
+    if ((request == NULL) || ((method == NULL) || (target == NULL)) {
+        fprintf(stderr, "[ERROR] unable to parse HTTP request\n");
+        return;
+    }
+
     int status;
 
     char tmp_target[TARGET_LEN] = { '\0' };
