@@ -184,8 +184,8 @@ int http_500(char *response) {
 
 /*
  * This function creates an HTTP response, putting it into the given response
- * argument. The HTTP response starts with the given header line, some
- * additional metadata, and then adds the given content. It returns the total
+ * argument. The HTTP response starts with the given header line, the content's
+ * type, some metadata, and then adds the given content. It returns the total
  * size of the HTTP response to be used in send() or SERVER_ERR in case of
  * unrecoverable error.
  */
@@ -195,17 +195,14 @@ int create_http_response(char *response, char *header, char *mime,
     int status; 
     int tot_bytes = 0;
 
-    /* formats date like Sun, 16 Aug 2026 14:48:37 GMT */
 
-    time_t secs = time(NULL);  /* time in secs since 1970 */
-
+    time_t secs = time(NULL);
     if (secs == -1) {
         fprintf(stderr, "[WARNING] unable to get time with time()...leaving"
                         "date blank in HTTP response");
     }
 
     struct tm *curr_time = NULL;
-
     if (secs != -1) {
         curr_time = gmtime(&secs);  /* time in GMT */
 
@@ -218,6 +215,7 @@ int create_http_response(char *response, char *header, char *mime,
     char date[DATE_LEN] = { '\0' };
     
     if ((secs != -1) && (curr_time != NULL)) {
+        /* formats date like Sun, 16 Aug 2026 14:48:37 GMT */
         /* add 1 because returns number bytes written excluding NUL byte */
 
         status = strftime(date, sizeof(date), "%a, %d %b %Y %T GMT",
@@ -245,7 +243,8 @@ int create_http_response(char *response, char *header, char *mime,
                 "snprintf()\n");
         return SERVER_ERR;
     }
-    else if (status >= RES_LEN) {
+
+    if (status >= RES_LEN) {
         fprintf(stderr, "[WARNING] HTTP response too long...truncating"
                 "response\n");
         return RES_LEN;
@@ -302,7 +301,7 @@ void handle_http_request(int client_socket) {
     int recv_bytes = recv(client_socket, request, REQ_LEN - 1, 0);
 
     if (recv_bytes == -1) {
-       fprintf(stderr, "[ERROR] unable to read HTTP request with recv()\n"); 
+       fprintf(stderr, "[ERROR] unable to receive HTTP request\n"); 
        return;
     }
 
