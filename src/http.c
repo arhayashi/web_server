@@ -192,20 +192,25 @@ int http_500(char *response) {
 
 int create_http_response(char *response, char *header, char *mime,
                          char *content, int size) {
+    if (((response == NULL) || (header == NULL)) ||
+        ((mime == NULL) || (content == NULL))) {
+        return SERVER_ERR;
+    }
+
     int status; 
     int tot_bytes = 0;
 
-
     time_t secs = time(NULL);
+
     if (secs == -1) {
         fprintf(stderr, "[WARNING] unable to get time with time()...leaving"
                         "date blank in HTTP response");
     }
 
     struct tm *curr_time = NULL;
+
     if (secs != -1) {
         curr_time = gmtime(&secs);  /* time in GMT */
-
         if (curr_time == NULL) {
             fprintf(stderr, "[WARNING] unable to transform time with gmtime()"
                             "...leaving date blank in HTTP response");
@@ -220,7 +225,6 @@ int create_http_response(char *response, char *header, char *mime,
 
         status = strftime(date, sizeof(date), "%a, %d %b %Y %T GMT",
                           curr_time) + 1;
-
         if (status == 0) {
             fprintf(stderr, "[WARNING] date too long...leaving date blank in"
                     "HTTP response");
