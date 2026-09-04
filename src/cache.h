@@ -6,6 +6,8 @@
 
 #include "process_file.h"
 
+/* use diff time to get difference in time */
+
 typedef struct node_t {
     char *target;
     file_cont_t *content;

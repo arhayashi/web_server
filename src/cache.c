@@ -163,6 +163,50 @@ void remove_from_cache(cache_t *cache) {
     cache->size -=1;
 } /* remove_from_cache() */
 
+/*
+ * This function searches the cache for the node_t entry with the given target.
+ * On cache hits, it returns the corresponding file_cont_t content. On cache
+ * misses, it returns NULL. Additionally, if the entry has expired, NULL is
+ * returned to indicate that the file must be re-read.
+ */
+
+file_cont_t *search_cache(cache_t *cache, char *target) {
+    if ((cache == NULL) || (target == NULL)) {
+        return NULL;
+    }
+
+    printf("[LOG] searching cache for %s\n", target);
+
+    node_t *entry = cache->head;
+
+    time_t curr_time = time(NULL);
+
+    if (curr_time == -1) {
+        printf("[WARNING] cache error...unable to get time\n");
+        return NULL;
+    }
+
+    while (entry != NULL) {
+        if (strcmp(entry->target, target) == 0) {
+            if (difftime(curr_time, entry->created_at) > cache->expr) {
+                printf("[LOG] cache miss...entry expired\n");
+                return NULL;
+            }
+
+            printf("[LOG] cache hit\n");
+            return entry->content;
+        }
+
+        entry = entry->next;
+    }
+
+    printf("[LOG] cache miss\n");
+
+    return NULL;
+} /* search_cache() */
+
+#if 0
+
 int main(void) {
     cache_t *cache = create_cache(10, 0);
     node_t *p;
@@ -191,5 +235,9 @@ int main(void) {
         p = p->next;
     }
 
+    search_cache(cache, "/1");
+
     delete_cache(&cache);
 }
+
+#endif
