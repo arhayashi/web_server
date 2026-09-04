@@ -127,6 +127,10 @@ int http_200(char *response, char *target, file_cont_t **file_cont) {
  */
 
 int http_400(char *response) {
+    if (response == NULL) {
+        return SERVER_ERR;
+    }
+
     fprintf(stderr, "[WARNING] sending HTTP 400 Bad Request response\n");
 
     char *header = "HTTP/1.1 400 Bad Request";
@@ -403,8 +407,7 @@ void send_response(int fd, char *response, int size) {
         status = send(fd, response, size - bytes_sent, 0);
 
         if (status == -1) {
-            fprintf(stderr, "[ERROR] error while sending response with "
-                    "send()\n");
+            fprintf(stderr, "[ERROR] error while sending response\n");
             return;
         }
 
