@@ -172,6 +172,10 @@ int http_404(char *response, char *target, file_cont_t **file_cont) {
  */
 
 int http_500(char *response) {
+    if (response == NULL) {
+        return SERVER_ERR;
+    }
+
     fprintf(stderr, "[WARNING] sending HTTP 500 Internal Server Error "
             "response\n");
 
